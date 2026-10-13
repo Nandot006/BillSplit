@@ -1,0 +1,36 @@
+node_modules/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.env
+*.db
+*.db-journal
+.expo/
+.next/
+dist/
+build/
+
+# --- Secrets & credentials (never commit) ---
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*service-account*.json
+*credentials*.json
+
+
+# --- Tooling / OS noise ---
+*.tsbuildinfo
+next-env.d.ts
+coverage/
+.vercel/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

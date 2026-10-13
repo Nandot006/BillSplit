@@ -1,0 +1,8 @@
+{
+  "name": "billsplit",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
