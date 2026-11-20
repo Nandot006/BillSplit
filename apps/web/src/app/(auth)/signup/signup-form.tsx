@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useActionState } from "react";
 
+import { Button, Field, Notice } from "@/components/ui";
+
 import { signup } from "../actions";
 
 export function SignupForm() {
@@ -11,62 +13,39 @@ export function SignupForm() {
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-semibold">Sign up</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Already have an account?{" "}
-          <Link href="/login" className="font-medium underline underline-offset-2">
+        <h1 className="text-3xl font-bold">Create your account</h1>
+        <p className="mt-1 text-sm text-ink-soft">
+          Already have one?{" "}
+          <Link href="/login" className="font-semibold text-ink underline underline-offset-2">
             Log in
           </Link>
         </p>
       </div>
 
-      <label className="flex flex-col gap-1 text-sm">
-        Display name
-        <input
-          type="text"
-          name="displayName"
-          required
-          autoComplete="name"
-          className="rounded-md border border-zinc-300 px-3 py-2 text-base dark:border-zinc-700 dark:bg-zinc-900"
-        />
-      </label>
+      <Field
+        label="Your name"
+        hint="What your friends will see on bills."
+        type="text"
+        name="displayName"
+        required
+        autoComplete="name"
+      />
+      <Field label="Email" type="email" name="email" required autoComplete="email" />
+      <Field
+        label="Password"
+        hint="At least 8 characters."
+        type="password"
+        name="password"
+        required
+        minLength={8}
+        autoComplete="new-password"
+      />
 
-      <label className="flex flex-col gap-1 text-sm">
-        Email
-        <input
-          type="email"
-          name="email"
-          required
-          autoComplete="email"
-          className="rounded-md border border-zinc-300 px-3 py-2 text-base dark:border-zinc-700 dark:bg-zinc-900"
-        />
-      </label>
+      {state?.error && <Notice tone="error">{state.error}</Notice>}
 
-      <label className="flex flex-col gap-1 text-sm">
-        Password
-        <input
-          type="password"
-          name="password"
-          required
-          minLength={8}
-          autoComplete="new-password"
-          className="rounded-md border border-zinc-300 px-3 py-2 text-base dark:border-zinc-700 dark:bg-zinc-900"
-        />
-      </label>
-
-      {state?.error && (
-        <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-          {state.error}
-        </p>
-      )}
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-md bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-60"
-      >
-        {pending ? "Signing up…" : "Sign up"}
-      </button>
+      <Button type="submit" busy={pending}>
+        {pending ? "Creating account…" : "Create account"}
+      </Button>
     </form>
   );
 }

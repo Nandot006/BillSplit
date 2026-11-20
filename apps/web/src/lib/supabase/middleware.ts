@@ -13,7 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { env } from "@/lib/env";
 
-const PUBLIC_PATHS = ["/login", "/signup"];
+const PUBLIC_PATHS = ["/login", "/signup", "/auth/callback"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -51,7 +51,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (user && isPublicPath) {
+  if (user && isPublicPath && request.nextUrl.pathname !== "/auth/callback") {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

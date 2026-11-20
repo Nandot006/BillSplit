@@ -55,7 +55,8 @@ export async function apiFetch<TResponse>(
 ): Promise<TResponse> {
   const { body, headers, accessToken, ...rest } = options;
 
-  const token = accessToken ?? (typeof window !== "undefined" ? await getBrowserAccessToken() : undefined);
+  const token =
+    accessToken ?? (typeof window !== "undefined" ? await getBrowserAccessToken() : undefined);
 
   const response = await fetch(`${env.apiUrl}${path}`, {
     ...rest,
