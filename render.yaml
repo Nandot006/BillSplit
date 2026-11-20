@@ -1,0 +1,41 @@
+# Render Blueprint for the BillSplit backend (CLAUDE.md SS5: Backend -> Render).
+# The web app deploys separately on Vercel (apps/web).
+#
+# Free plan notes:
+#   - The service sleeps after ~15 min without traffic; the next request
+#     wakes it in about a minute.
+#   - preDeployCommand is paid-only, so migrations run at the start of
+#     startCommand instead: every boot applies any pending Alembic migration
+#     before uvicorn starts serving. `alembic upgrade head` is a no-op when
+#     the database is already current.
+services:
+  - type: web
+    name: billsplit-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: ENV
+        value: prod
+      # Supabase -> Connect -> "Session pooler" string (port 5432). Not the
+      # "Direct connection" one: that host is IPv6-only and Render can't reach it.
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      # Only needed if the Supabase project still signs tokens with the
+      # legacy shared JWT secret. Leave blank for asymmetric signing keys.
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CLAUDE_MODEL
+        value: claude-haiku-5-5
+      # Your Vercel URL(s), comma-separated, e.g. https://billsplit.vercel.app
+      - key: CORS_ORIGINS
+        sync: false

@@ -66,13 +66,26 @@ See `buildguide.md` for the full, current block lists for each phase — that do
 | Mobile frontend | React Native + Expo (TypeScript) |
 | Backend | Python + FastAPI |
 | Database | PostgreSQL, hosted on **Supabase** (confirmed provider) |
-| Image storage | S3-compatible object storage (S3 or Supabase Storage) |
-| Auth | JWT-based, or a managed provider (Supabase Auth / Clerk) to start |
-| Hosting | Web → Vercel · Backend → Railway/Render/Fly.io · DB → Supabase · Mobile → Expo EAS |
+| Image storage | Supabase Storage, private `bill-images` bucket (see `supabase/setup.sql`) |
+| Auth | Supabase Auth; the backend verifies both legacy HS256 and asymmetric (JWKS) tokens |
+| Receipt OCR + item tagging | Claude API, `claude-haiku-5-5` (decision log 2026-11-20) |
+| Hosting | Web → Vercel · Backend → **Render (free plan)** · DB → Supabase · Mobile → Expo EAS |
 
 These are accepted defaults, not open questions. If a real blocker forces a change, update `architecture.md` and this file in the same session — don't silently drift onto a different stack.
 
 ---
+
+## 5a. Decision log — 2026-11-20 (web app completion + deploy)
+
+All confirmed explicitly with the developer before any code was written:
+
+- **OCR + taxonomy tagging run on the Claude API** (`claude-haiku-5-5`), replacing Google Cloud Vision + Gemini. Still behind the `OCRProvider` / `TaxonomyClassifier` interfaces (`backend/app/services/ocr/claude.py`).
+- **Backend hosting: Render free plan.** It sleeps after ~15 min idle and takes ~1 min to wake; accepted. Migrations run at the start of the Render start command (`render.yaml`) because pre-deploy commands are paid-only and the developer's Windows machine blocks the psycopg2 DLL.
+- **Per-bill participants.** A bill records who was actually there (`bill_participants`). Predictions, tax/tip, and settlement use participants, not the whole group; a person can be removed from just one bill.
+- **Shared items** via `PUT /bills/{id}/items/{item_id}/assignees` (design.md §7).
+- **Group creator is auto-added** as a claimed member of every group they create.
+- **Items are editable during `needs_review`** (add/edit/delete), locked from `open` on.
+- **Token verification accepts both** legacy HS256 secrets and asymmetric JWKS-signed tokens.
 
 ## 6. Prediction approach — note the override
 
@@ -160,6 +173,8 @@ These aren't decided anywhere else in the project yet — they're sensible defau
 - One logical change per commit/PR — don't bundle an unrelated refactor into a feature commit.
 - Every PR that touches the OCR → prediction pipeline must include or update a regression fixture (see §9).
 - Never commit `.env`, credentials, or provider keys.
+- **Every new table needs row level security switched on in its migration** (`ALTER TABLE ... ENABLE ROW LEVEL SECURITY`). Supabase exposes the `public` schema through its REST API with the public anon key; RLS with no policies blocks that, while the backend (table owner) is unaffected. See migration `c41f8e7a9d02`.
+- Every SQLAlchemy `Enum` column must pass `values_callable=enum_values` - Postgres enum types hold the *values*. `tests/test_enum_storage.py` enforces this.
 
 ---
 
@@ -167,7 +182,7 @@ These aren't decided anywhere else in the project yet — they're sensible defau
 
 Per `buildguide.md`, no build-sequencing decisions are open. The following implementation-detail decisions from `architecture.md` §9 remain open and should be resolved when that part of the code is reached, then recorded back into `architecture.md`:
 
-- Which OCR provider to start with, and its free-tier limits. (Resolved in `design.md` §1: Google Cloud Vision.)
+- Which OCR provider to start with, and its free-tier limits. (Resolved in `design.md` §1: Claude API, superseding Google Cloud Vision on 2026-11-20.)
 - Managed auth provider vs. hand-rolled JWT. (Resolved in `design.md` §1: Supabase Auth.)
 - When to introduce a real task queue vs. FastAPI `BackgroundTasks`. (Resolved in `design.md` §1: `BackgroundTasks` for v1.)
 

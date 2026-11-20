@@ -12,9 +12,9 @@ Every decision below was reached through a structured interview with the develop
 |---|---|---|
 | Auth | **Supabase Auth** | Reuses the Supabase project already confirmed for Postgres. |
 | Auth wiring placement | **Phase 1 block 1** (Setup & scaffolding) | Not a dedicated block — it's config + a JWT-verification middleware, not core logic. `Person` links to it (see §3). |
-| OCR provider | **Google Cloud Vision** (primary) | Free tier (1,000 units/month) comfortably covers this project's scale. Sits behind the swappable `OCRProvider` interface per `architecture.md` §4a. |
+| OCR provider | **Claude API, `claude-haiku-5-5`** (changed 2026-11-20; was Google Cloud Vision) | Reads the receipt photo directly into structured line items, merchant, tax (all GST/VAT lines summed) and tip (tip + service charge). Structured outputs, so the response always matches the schema. Behind the swappable `OCRProvider` interface per `architecture.md` §4a. Paid per receipt. |
 | OCR fallback | **Tesseract**, optional, later | Fully local/offline, zero cost, but noticeably worse on skewed/faded photographed receipts without a preprocessing pipeline. Not built for v1 — a future addition if wanted for the learning value, not a replacement for Cloud Vision. |
-| OCR→taxonomy LLM | **Gemini API**, small/cheap tier (e.g. Flash-Lite) | Free tier. This is a small classification task (map OCR text → taxonomy categories), not a reasoning task — no need for a large model. |
+| OCR→taxonomy LLM | **Claude API, `claude-haiku-5-5`** (changed 2026-11-20; was Gemini) | One batched call per receipt tags every item. Because dietary flags are a hard filter (§6), the prompt asks for every flag an item satisfies, including obvious ones like `no-alcohol` on food - a missing flag silently excludes everyone with that restriction. |
 | Image storage | **Supabase Storage** | One vendor for DB + Auth + Storage keeps Phase 0 simple. |
 | Image retention | **Keep indefinitely** | Revisit a deletion policy once there's real usage data on storage cost — bill images are the source of truth if a split is ever disputed. |
 | Migrations | **Alembic** | Standard for SQLAlchemy/FastAPI. |
@@ -160,6 +160,10 @@ PredictionFeedback
   corrected_person_id          uuid FK -> Person.id
   created_at                   timestamptz
 
+BillParticipant              -- added 2026-11-20: who was actually on this bill
+  bill_id             uuid FK -> Bill.id     PK
+  person_id           uuid FK -> Person.id   PK
+
 Split
   id                  uuid PK
   bill_id             uuid FK -> Bill.id
@@ -199,6 +203,10 @@ Each `Person` and each `BillItem` is represented as a 20-dimensional vector over
 A `BillItem` can be assigned to more than one Person (`BillItemAssignment` is many-to-many). The scorer still predicts a single best-match default; the itemized-breakdown editing UI (Phase 2 block 7 / Phase 3 block 7) lets the user multi-select additional people onto an item before finalizing. Cost splits evenly among everyone assigned (`share_fraction = 1 / assigned_count`).
 
 ---
+
+**Learning signal for shared items (decided 2026-11-20):** each person newly added to an item gets the same +1 nudge and `PredictionFeedback` row a single-person correction would; the scorer's original pick, if no longer on the item, gets one −1 nudge; re-saving an unchanged set records nothing.
+
+**Per-bill participants (decided 2026-11-20):** everything in §6, §9, §10 and §12 that says "the people on the bill" means the bill's `BillParticipant` rows - not every Person in the group. Removing someone from one bill re-scores their items against the remaining participants (§9) without touching the group.
 
 ## 8. Learning loop (`learned_correction`)
 
@@ -244,8 +252,8 @@ Prefill defaults to whoever paid **least recently**: sort by `last_paid_at` asce
 
 ## 13. OCR pipeline & failure handling
 
-1. Receipt image → **Google Cloud Vision** (`OCRProvider` interface) → raw text.
-2. Raw text → **Gemini API** (small model tier) → mapped onto the taxonomy in §3, populating `BillItem.base_type` and the `BillItemFlavorTag`/`BillItemDietaryFlag` join tables.
+1. Receipt image → **Claude** (`ClaudeReceiptOCRProvider`, `OCRProvider` interface) → line items, merchant, tax, tip.
+2. Item names → **Claude** (`ClaudeTaxonomyClassifier`, one batched call) → mapped onto the taxonomy in §3, populating `BillItem.base_type` and the `BillItemFlavorTag`/`BillItemDietaryFlag` join tables.
 3. **On OCR failure** (provider error, or text extraction that can't be parsed into line items at all): the Bill moves to `needs_manual_entry` status. The user types in merchant, items, prices, and tax/tip by hand instead of the pipeline populating them. No automatic retry loop — a bad photo is a bad photo; manual entry is simply always available as an option on any bill stuck in `processing` or `needs_manual_entry`.
 
 ---

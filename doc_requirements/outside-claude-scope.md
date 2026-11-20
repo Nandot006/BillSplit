@@ -1,5 +1,7 @@
 # Outside Claude Code — Setup & Account Tasks (BillSplit)
 
+> **Updated 2026-11-20:** the deploy steps now live in `/DEPLOY.md` (Supabase → Claude API key → Render → Vercel). The OCR provider is now the Claude API; Google Cloud Vision / Gemini keys are no longer needed. Sections below are kept for history.
+
 Things that need to happen *outside* this tool: cloud consoles, account signups, local OS/admin changes. Claude Code can write code, run local commands, and (with your confirmation) push to GitHub — but it can't click through a web signup flow, hold your payment details, or change OS-level security policy.
 
 Status below reflects what's actually configured right now (checked via `backend/.env`, `apps/web/.env.local`), not assumptions.
