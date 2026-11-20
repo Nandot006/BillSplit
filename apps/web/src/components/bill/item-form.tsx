@@ -134,8 +134,9 @@ export function ItemForm({
             onChange={setFlavors}
           />
           <p className="text-xs text-muted">
-            Tick everything that applies. Someone with a dietary restriction (say, doesn&apos;t
-            drink, or avoids pork) is only ever guessed for items ticked as suitable for them.
+            Tick everything that applies. Someone with a dietary restriction (say, vegetarian, or
+            avoids pork) is only ever guessed for items ticked as suitable for them. Not drinking
+            only rules out alcoholic drinks.
           </p>
           <TagPicker
             legend="Suitable for"

@@ -123,3 +123,44 @@ def test_predict_assignment_all_candidates_excluded_needs_review_with_no_winner(
     assert result.winner_person_id is None
     assert result.needs_review is True
     assert result.all_scores == []
+
+
+# --- no-alcohol (decision 2026-11-20): only rules out alcoholic drinks ------
+
+
+def test_no_alcohol_does_not_require_a_tag_on_food():
+    teetotaller = PersonVector(hard_restrictions={TaxonomyValue.NO_ALCOHOL})
+    untagged_dosa = ItemVector(tags={TaxonomyValue.ENTREE})
+    untagged_coffee = ItemVector(tags={TaxonomyValue.DRINK_NON_ALCOHOLIC})
+    no_tags_at_all = ItemVector(tags=set())  # e.g. a line typed in by hand
+    assert person_survives_hard_restrictions(teetotaller, untagged_dosa)
+    assert person_survives_hard_restrictions(teetotaller, untagged_coffee)
+    assert person_survives_hard_restrictions(teetotaller, no_tags_at_all)
+
+
+def test_no_alcohol_still_rules_out_alcoholic_drinks():
+    teetotaller = PersonVector(hard_restrictions={TaxonomyValue.NO_ALCOHOL})
+    beer = ItemVector(tags={TaxonomyValue.DRINK_ALCOHOLIC})
+    assert not person_survives_hard_restrictions(teetotaller, beer)
+
+
+def test_other_restrictions_stay_strict_alongside_no_alcohol():
+    """A vegetarian who doesn't drink is still only given items tagged
+    vegetarian - relaxing no-alcohol doesn't relax the others."""
+    person = PersonVector(hard_restrictions={TaxonomyValue.NO_ALCOHOL, TaxonomyValue.VEGETARIAN})
+    untagged_dish = ItemVector(tags={TaxonomyValue.ENTREE})
+    veg_dish = ItemVector(tags={TaxonomyValue.ENTREE, TaxonomyValue.VEGETARIAN})
+    assert not person_survives_hard_restrictions(person, untagged_dish)
+    assert person_survives_hard_restrictions(person, veg_dish)
+
+
+def test_teetotaller_is_predicted_for_untagged_food():
+    teetotaller_id, other_id = uuid.uuid4(), uuid.uuid4()
+    vectors = {
+        teetotaller_id: PersonVector(
+            scores={TaxonomyValue.DESSERT: 1.0}, hard_restrictions={TaxonomyValue.NO_ALCOHOL}
+        ),
+        other_id: PersonVector(scores={TaxonomyValue.DESSERT: -1.0}),
+    }
+    result = predict_assignment(vectors, ItemVector(tags={TaxonomyValue.DESSERT}))
+    assert result.winner_person_id == teetotaller_id

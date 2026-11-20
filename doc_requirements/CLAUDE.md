@@ -86,6 +86,7 @@ All confirmed explicitly with the developer before any code was written:
 - **Group creator is auto-added** as a claimed member of every group they create.
 - **Items are editable during `needs_review`** (add/edit/delete), locked from `open` on.
 - **Token verification accepts both** legacy HS256 secrets and asymmetric JWKS-signed tokens.
+- **`no-alcohol` only excludes alcoholic drinks** - not every item lacking a `no-alcohol` tag. Other dietary restrictions stay strict (design.md §6).
 
 ## 6. Prediction approach — note the override
 

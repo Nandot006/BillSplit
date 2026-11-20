@@ -6,6 +6,7 @@ from app.models.taxonomy import (
     BASE_TYPE_TAXONOMY_VALUES,
     DIETARY_FLAG_TAXONOMY_VALUES,
     FLAVOR_TAG_TAXONOMY_VALUES,
+    TaxonomyValue,
 )
 from app.services.prediction.vectors import ItemVector, PersonVector
 
@@ -43,10 +44,22 @@ class PredictionResult:
 def person_survives_hard_restrictions(person_vector: PersonVector, item_vector: ItemVector) -> bool:
     """design.md SS6: if a Person has a dietary flag marked as a hard
     restriction and the item isn't tagged with that flag, the person is
-    removed from consideration entirely - not just down-weighted."""
+    removed from consideration entirely - not just down-weighted.
+
+    One exception (decision 2026-11-20): `no-alcohol` only rules out items
+    whose base type is an alcoholic drink. Requiring a "no-alcohol" tag on
+    every dosa and coffee meant anyone who doesn't drink was never guessed
+    for an item that wasn't tagged exhaustively - e.g. anything typed in by
+    hand. The other flags stay strict: an untagged dish could contain meat,
+    pork, nuts, etc., so it isn't safe to assume.
+    """
     for restricted_value in person_vector.hard_restrictions:
         if restricted_value not in DIETARY_FLAG_TAXONOMY_VALUES:
             continue  # defensive: is_hard_restriction only means hard-exclude for dietary flags
+        if restricted_value == TaxonomyValue.NO_ALCOHOL:
+            if item_vector.has(TaxonomyValue.DRINK_ALCOHOLIC):
+                return False
+            continue
         if not item_vector.has(restricted_value):
             return False
     return True
