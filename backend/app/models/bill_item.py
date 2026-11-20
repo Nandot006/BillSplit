@@ -9,7 +9,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.base import Base
-from app.models.taxonomy import BaseType
+from app.models.taxonomy import BaseType, enum_values
 
 if TYPE_CHECKING:
     from app.models.bill import Bill
@@ -35,7 +35,8 @@ class BillItem(Base):
     price: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     base_type: Mapped[BaseType | None] = mapped_column(
-        SAEnum(BaseType, name="base_type", native_enum=True), nullable=True
+        SAEnum(BaseType, name="base_type", native_enum=True, values_callable=enum_values),
+        nullable=True,
     )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

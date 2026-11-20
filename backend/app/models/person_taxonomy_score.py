@@ -8,7 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.base import Base
-from app.models.taxonomy import TaxonomySource, TaxonomyValue
+from app.models.taxonomy import TaxonomySource, TaxonomyValue, enum_values
 
 if TYPE_CHECKING:
     from app.models.person import Person
@@ -29,7 +29,8 @@ class PersonTaxonomyScore(Base):
         ForeignKey("people.id", ondelete="CASCADE"), nullable=False
     )
     taxonomy_value: Mapped[TaxonomyValue] = mapped_column(
-        SAEnum(TaxonomyValue, name="taxonomy_value", native_enum=True), nullable=False
+        SAEnum(TaxonomyValue, name="taxonomy_value", native_enum=True, values_callable=enum_values),
+        nullable=False,
     )
     # Affinity weight, roughly [-1, 1]. Dietary flags don't really use this
     # dimension as a weight - they're a hard exclude instead (see
@@ -38,7 +39,10 @@ class PersonTaxonomyScore(Base):
     score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     is_hard_restriction: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     source: Mapped[TaxonomySource] = mapped_column(
-        SAEnum(TaxonomySource, name="taxonomy_source", native_enum=True), nullable=False
+        SAEnum(
+            TaxonomySource, name="taxonomy_source", native_enum=True, values_callable=enum_values
+        ),
+        nullable=False,
     )
     # Denominator for the shrinking learning rate (design.md SS8) - how many
     # learned_correction updates have landed on this specific dimension.

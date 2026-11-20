@@ -7,63 +7,19 @@ from app.models.bill import Bill, BillStatus
 from app.models.group import Group
 from app.models.person import Person
 from app.models.person_taxonomy_score import PersonTaxonomyScore
-from app.models.taxonomy import BaseType, FlavorTag, TaxonomySource, TaxonomyValue
+from app.models.taxonomy import BaseType, TaxonomySource, TaxonomyValue
 from app.models.user import User
 from app.services.ocr.base import OCRLineItem, OCRProvider, OCRProviderError, OCRResult
-from app.services.ocr.google_vision import GoogleVisionOCRProvider
 from app.services.ocr.pipeline import process_bill
 from app.services.ocr.taxonomy_classifier import (
     TaxonomyClassification,
     TaxonomyClassificationError,
     TaxonomyClassifier,
-    build_classification_prompt,
-    parse_classification_response,
 )
+from tests.bill_helpers import add_whole_group_as_participants
 
-# --- GoogleVisionOCRProvider.parse_line_items: pure line-parsing logic ---
-
-
-def test_parse_line_items_extracts_name_and_trailing_price():
-    raw_text = "Margherita Pizza $12.50\nGarlic Bread 5.00\nnot a priced line\n"
-    items = GoogleVisionOCRProvider.parse_line_items(raw_text)
-    assert [(i.parsed_name, i.price) for i in items] == [
-        ("Margherita Pizza", Decimal("12.50")),
-        ("Garlic Bread", Decimal("5.00")),
-    ]
-
-
-def test_parse_line_items_skips_blank_and_unpriced_lines():
-    raw_text = "\n   \nSubtotal\nTotal due soon\n"
-    assert GoogleVisionOCRProvider.parse_line_items(raw_text) == []
-
-
-# --- taxonomy_classifier: prompt building + response parsing ---
-
-
-def test_build_classification_prompt_includes_every_taxonomy_value():
-    prompt = build_classification_prompt("Caesar Salad")
-    assert "Caesar Salad" in prompt
-    for base_type in BaseType:
-        assert base_type.value in prompt
-    for flavor_tag in FlavorTag:
-        assert flavor_tag.value in prompt
-
-
-def test_parse_classification_response_happy_path():
-    raw = '{"base_type": "entree", "flavor_tags": ["savory", "spicy"], "dietary_flags": ["vegan"]}'
-    result = parse_classification_response(raw)
-    assert result.base_type == BaseType.ENTREE
-    assert result.flavor_tags == [FlavorTag.SAVORY, FlavorTag.SPICY]
-
-
-def test_parse_classification_response_rejects_invalid_json():
-    with pytest.raises(TaxonomyClassificationError):
-        parse_classification_response("not json at all")
-
-
-def test_parse_classification_response_rejects_unknown_taxonomy_value():
-    with pytest.raises(TaxonomyClassificationError):
-        parse_classification_response('{"base_type": "not-a-real-type"}')
+# Provider-specific parsing (Claude) is covered in tests/test_claude_ocr.py.
+# This file covers the provider-agnostic pipeline with fakes.
 
 
 # --- process_bill: the OCR -> taxonomy -> prediction pipeline, with fakes ---
@@ -118,6 +74,7 @@ def test_process_bill_happy_path_tags_items_and_predicts(db, bill_in_group):
     bob = Person(group_id=group.id, display_name="Bob")
     db.add_all([alice, bob])
     db.flush()
+    add_whole_group_as_participants(db, bill)
     # Alice loves entrees, Bob doesn't - a clean, confident prediction.
     db.add(
         PersonTaxonomyScore(

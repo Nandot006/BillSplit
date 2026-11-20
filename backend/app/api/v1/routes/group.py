@@ -7,6 +7,7 @@ from app.api.deps import get_accessible_group, get_current_user, get_db, require
 from app.models.bill import Bill, BillStatus
 from app.models.bill_item import BillItem
 from app.models.bill_item_assignment import BillItemAssignment
+from app.models.bill_participant import BillParticipant
 from app.models.group import Group
 from app.models.payer_history import PayerHistory
 from app.models.person import Person
@@ -14,7 +15,7 @@ from app.models.user import User
 from app.schemas.group import AddPersonToGroup, GroupCreate, GroupDetailOut, GroupOut, GroupUpdate
 from app.schemas.payer import PayerSuggestionOut
 from app.schemas.person import PersonOut
-from app.services.payer import suggest_payer
+from app.services.payer import record_payer_change, suggest_payer
 from app.services.prediction.pipeline import redistribute_bill_after_person_removal
 
 router = APIRouter()
@@ -26,11 +27,30 @@ def create_group(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Creates the group and adds its creator as the first member - a
+    claimed Person linked to their account (decision 2026-11-20), so their
+    own share, payer history and questionnaire have somewhere to live."""
     group = Group(name=body.name, creator_user_id=current_user.id)
     db.add(group)
+    db.flush()
+    db.add(
+        Person(
+            group_id=group.id,
+            supabase_user_id=current_user.id,
+            display_name=_default_display_name(current_user),
+        )
+    )
     db.commit()
     db.refresh(group)
     return group
+
+
+def _default_display_name(user: User) -> str:
+    if user.display_name and user.display_name.strip():
+        return user.display_name.strip()
+    if user.email:
+        return user.email.split("@", 1)[0]
+    return "Me"
 
 
 @router.get("/groups", response_model=list[GroupOut])
@@ -206,6 +226,13 @@ def remove_person_from_group(
         left_something_unassigned = redistribute_bill_after_person_removal(db, bill, person_id)
         if left_something_unassigned and bill.status == BillStatus.OPEN:
             bill.status = BillStatus.NEEDS_REVIEW
+        # bills.payer_person_id has no ON DELETE rule, so an open bill still
+        # pointing at this person as payer would block the delete below.
+        # Clear it (the bill isn't settled yet; someone picks a new payer).
+        if bill.payer_person_id == person_id:
+            record_payer_change(db, group.id, person_id, None)
+            bill.payer_person_id = None
 
+    db.query(BillParticipant).filter(BillParticipant.person_id == person_id).delete()
     db.delete(person)
     db.commit()

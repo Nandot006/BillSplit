@@ -1,0 +1,17 @@
+{
+  "description": "Synthetic. A photo that isn't a receipt: Claude reports is_receipt=false, so the pipeline must produce no items (and the bill falls back to manual entry).",
+  "claude_response": {
+    "is_receipt": false,
+    "merchant_name": null,
+    "items": [],
+    "tax_total": null,
+    "tip_total": null
+  },
+  "expected": {
+    "merchant_name": null,
+    "tax_total": null,
+    "tip_total": null,
+    "subtotal": null,
+    "items": []
+  }
+}

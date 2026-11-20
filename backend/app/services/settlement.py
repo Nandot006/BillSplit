@@ -2,7 +2,7 @@
 
 sync_bill_splits is the only writer of Split rows - it snapshots
 app/services/splits.compute_bill_splits' live math into the splits table,
-upserting one row per Person currently in the bill's group and carrying
+upserting one row per Person currently on the bill (its participants) and carrying
 forward any existing is_paid/paid_at rather than resetting it. Called
 every time a settlement-facing route touches an OPEN bill (see
 ensure_settlement_rows below), so persisted amounts never go stale while
@@ -21,18 +21,15 @@ import uuid
 from sqlalchemy.orm import Session
 
 from app.models.bill import Bill, BillStatus
-from app.models.person import Person
 from app.models.split import Split
+from app.services.participants import bill_participant_people
 from app.services.splits import compute_bill_splits
 
 
 def sync_bill_splits(db: Session, bill: Bill) -> list[Split]:
-    people = (
-        db.query(Person)
-        .filter(Person.group_id == bill.group_id)
-        .order_by(Person.display_name)
-        .all()
-    )
+    # Decision 2026-11-20: settlement covers the bill's participants, not
+    # the whole group (app/models/bill_participant.py).
+    people = bill_participant_people(db, bill)
     live_splits = {s.person_id: s for s in compute_bill_splits(bill, people)}
 
     existing_rows = {
@@ -52,7 +49,7 @@ def sync_bill_splits(db: Session, bill: Bill) -> list[Split]:
         synced.append(row)
 
     # A Person no longer part of the live split (e.g. removed from the
-    # group since the last sync) shouldn't keep a stale settlement row
+    # bill or the group since the last sync) shouldn't keep a stale settlement row
     # around - drop it, same as compute_bill_splits already drops them
     # from the live view.
     stale_person_ids = set(existing_rows) - set(live_splits)

@@ -10,6 +10,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 
 from app.db.base import Base
+from app.models.bill_participant import BillParticipant  # noqa: F401 - registers the mapper
+from app.models.taxonomy import enum_values
 
 if TYPE_CHECKING:
     from app.models.bill_item import BillItem
@@ -49,7 +51,8 @@ class Bill(Base):
     tip_total: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=Decimal("0"))
     grand_total: Mapped[Decimal | None] = mapped_column(Numeric(10, 2), nullable=True)
     status: Mapped[BillStatus] = mapped_column(
-        SAEnum(BillStatus, name="bill_status", native_enum=True), nullable=False
+        SAEnum(BillStatus, name="bill_status", native_enum=True, values_callable=enum_values),
+        nullable=False,
     )
     payer_person_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("people.id"), nullable=True
@@ -62,3 +65,11 @@ class Bill(Base):
         back_populates="bill", cascade="all, delete-orphan"
     )
     payer: Mapped[Optional["Person"]] = relationship(foreign_keys=[payer_person_id])
+    participants: Mapped[list["BillParticipant"]] = relationship(
+        back_populates="bill", cascade="all, delete-orphan"
+    )
+
+    @property
+    def participant_person_ids(self) -> list[uuid.UUID]:
+        """Who was on this bill (app/models/bill_participant.py)."""
+        return [p.person_id for p in self.participants]

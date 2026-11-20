@@ -150,8 +150,12 @@ def test_get_bill_splits_endpoint(client, db_session_factory):
     alice_id = client.post(
         f"/api/v1/groups/{group_id}/people", json={"display_name": "Alice"}, headers=headers
     ).json()["id"]
+    # Only Alice is on this bill, so the creator (auto-added to the group)
+    # owes nothing - not even a share of tax.
     bill_id = client.post(
-        f"/api/v1/groups/{group_id}/bills", json={"merchant_name": "Diner"}, headers=headers
+        f"/api/v1/groups/{group_id}/bills",
+        json={"merchant_name": "Diner", "participant_person_ids": [alice_id]},
+        headers=headers,
     ).json()["id"]
     item_id = client.post(
         f"/api/v1/bills/{bill_id}/items",

@@ -34,6 +34,28 @@ class AssignItemRequest(BaseModel):
     person_id: uuid.UUID
 
 
+class SetAssigneesRequest(BaseModel):
+    """Body for setting an item's full assignee set (design.md SS7 shared
+    items). One id behaves exactly like AssignItemRequest; several split the
+    item's cost evenly between them."""
+
+    person_ids: list[uuid.UUID] = Field(min_length=1)
+
+
+class BillItemUpdate(BaseModel):
+    """Fixing an item while the bill is being entered or reviewed
+    (decision 2026-11-20: OCR mistakes are editable in needs_review). Only
+    fields that are sent are changed; sending flavor_tags/dietary_flags
+    replaces that whole list."""
+
+    parsed_name: str | None = Field(default=None, min_length=1, max_length=300)
+    price: Decimal | None = Field(default=None, ge=0)
+    quantity: int | None = Field(default=None, ge=1)
+    base_type: BaseType | None = None
+    flavor_tags: list[FlavorTag] | None = None
+    dietary_flags: list[DietaryFlag] | None = None
+
+
 class BillItemOut(BaseModel):
     id: uuid.UUID
     bill_id: uuid.UUID

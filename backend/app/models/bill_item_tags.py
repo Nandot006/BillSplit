@@ -6,7 +6,7 @@ from sqlalchemy import ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
-from app.models.taxonomy import DietaryFlag, FlavorTag
+from app.models.taxonomy import DietaryFlag, FlavorTag, enum_values
 
 if TYPE_CHECKING:
     from app.models.bill_item import BillItem
@@ -24,7 +24,8 @@ class BillItemFlavorTag(Base):
         ForeignKey("bill_items.id", ondelete="CASCADE"), primary_key=True
     )
     flavor_tag: Mapped[FlavorTag] = mapped_column(
-        SAEnum(FlavorTag, name="flavor_tag", native_enum=True), primary_key=True
+        SAEnum(FlavorTag, name="flavor_tag", native_enum=True, values_callable=enum_values),
+        primary_key=True,
     )
 
     bill_item: Mapped["BillItem"] = relationship(back_populates="flavor_tags")
@@ -39,7 +40,8 @@ class BillItemDietaryFlag(Base):
         ForeignKey("bill_items.id", ondelete="CASCADE"), primary_key=True
     )
     dietary_flag: Mapped[DietaryFlag] = mapped_column(
-        SAEnum(DietaryFlag, name="dietary_flag", native_enum=True), primary_key=True
+        SAEnum(DietaryFlag, name="dietary_flag", native_enum=True, values_callable=enum_values),
+        primary_key=True,
     )
 
     bill_item: Mapped["BillItem"] = relationship(back_populates="dietary_flags")

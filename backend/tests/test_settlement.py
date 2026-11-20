@@ -17,6 +17,7 @@ from app.models.split import Split
 from app.models.user import User
 from app.services.settlement import ensure_settlement_rows, sync_bill_splits
 from tests.auth_helpers import auth_headers
+from tests.bill_helpers import add_whole_group_as_participants
 
 
 @pytest.fixture()
@@ -50,6 +51,7 @@ def _open_bill_with_one_item(db, group, payer, assignee, price="10.00", tax="0")
     )
     db.add(bill)
     db.flush()
+    add_whole_group_as_participants(db, bill)
     item = BillItem(bill_id=bill.id, parsed_name="Burger", price=Decimal(price))
     db.add(item)
     db.flush()
@@ -166,8 +168,12 @@ def _setup_open_bill_via_api(client, headers, group_id):
     bob_id = client.post(
         f"/api/v1/groups/{group_id}/people", json={"display_name": "Bob"}, headers=headers
     ).json()["id"]
+    # Only Alice and Bob were at this meal - the group creator (auto-added
+    # to every group) isn't a participant on this bill.
     bill_id = client.post(
-        f"/api/v1/groups/{group_id}/bills", json={"merchant_name": "Diner"}, headers=headers
+        f"/api/v1/groups/{group_id}/bills",
+        json={"merchant_name": "Diner", "participant_person_ids": [alice_id, bob_id]},
+        headers=headers,
     ).json()["id"]
     item_id = client.post(
         f"/api/v1/bills/{bill_id}/items",

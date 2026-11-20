@@ -33,7 +33,11 @@ def test_create_and_get_group(client, two_users):
         f"/api/v1/groups/{group_id}", headers=auth_headers(two_users["creator_id"])
     )
     assert get_resp.status_code == 200
-    assert get_resp.json()["people"] == []
+    # The creator is added as the group's first member, linked to their
+    # account (a claimed Person, not a shadow contact).
+    people = get_resp.json()["people"]
+    assert len(people) == 1
+    assert people[0]["supabase_user_id"] == str(two_users["creator_id"])
 
 
 def test_outsider_cannot_see_group(client, two_users):

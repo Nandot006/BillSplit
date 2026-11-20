@@ -18,6 +18,7 @@ from app.models.taxonomy import DietaryFlag, TaxonomySource, TaxonomyValue
 from app.models.user import User
 from app.services.prediction.pipeline import redistribute_bill_after_person_removal
 from tests.auth_helpers import auth_headers
+from tests.bill_helpers import add_whole_group_as_participants
 
 
 @pytest.fixture()
@@ -57,6 +58,7 @@ def test_shared_item_shares_are_renormalized_when_one_assignee_is_removed(
     bill = Bill(group_id=group.id, status=BillStatus.OPEN)
     db.add(bill)
     db.flush()
+    add_whole_group_as_participants(db, bill)
     item = _make_item(db, bill)
     for person in (alice, bob, cara):
         db.add(
@@ -95,6 +97,7 @@ def test_sole_assignee_item_is_rescored_against_remaining_people_only(db, group_
     bill = Bill(group_id=group.id, status=BillStatus.OPEN)
     db.add(bill)
     db.flush()
+    add_whole_group_as_participants(db, bill)
     item = BillItem(
         bill_id=bill.id,
         parsed_name="Burger",
@@ -139,6 +142,7 @@ def test_item_left_unassigned_when_hard_restriction_excludes_all_remaining_peopl
     bill = Bill(group_id=group.id, status=BillStatus.OPEN)
     db.add(bill)
     db.flush()
+    add_whole_group_as_participants(db, bill)
     item = _make_item(db, bill)
     db.add(BillItemDietaryFlag(bill_item_id=item.id, dietary_flag=DietaryFlag.VEGETARIAN))
     db.add(
@@ -161,6 +165,7 @@ def test_returns_false_when_person_had_no_assignments_on_this_bill(db, group_wit
     bill = Bill(group_id=group.id, status=BillStatus.OPEN)
     db.add(bill)
     db.flush()
+    add_whole_group_as_participants(db, bill)
     item = _make_item(db, bill)
     db.add(
         BillItemAssignment(

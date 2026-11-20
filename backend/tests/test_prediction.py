@@ -310,8 +310,12 @@ def test_confirm_requires_every_item_assigned_then_moves_bill_to_open(
     db.commit()
     db.close()
 
+    # Only the two vegans were on this bill (not the group creator, who has
+    # no restrictions and would otherwise be the scorer's only candidate).
     bill_id = client.post(
-        f"/api/v1/groups/{ctx['group_id']}/bills", json={"merchant_name": "Diner"}, headers=headers
+        f"/api/v1/groups/{ctx['group_id']}/bills",
+        json={"merchant_name": "Diner", "participant_person_ids": [ctx["alice_id"], ctx["bob_id"]]},
+        headers=headers,
     ).json()["id"]
     client.post(
         f"/api/v1/bills/{bill_id}/items",

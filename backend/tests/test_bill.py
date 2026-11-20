@@ -41,7 +41,7 @@ def test_create_bill_without_image_starts_needs_manual_entry(client, creator_wit
 def test_create_bill_with_image_starts_processing(client, creator_with_group):
     resp = client.post(
         f"/api/v1/groups/{creator_with_group['group_id']}/bills",
-        json={"image_storage_path": "receipts/abc.jpg"},
+        json={"image_storage_path": f"{creator_with_group['creator_id']}/abc.jpg"},
         headers=auth_headers(creator_with_group["creator_id"]),
     )
     assert resp.json()["status"] == "processing"
@@ -139,7 +139,7 @@ def test_finalize_requires_at_least_one_item(client, creator_with_group):
     assert resp.json()["status"] == "needs_review"
 
 
-def test_cannot_add_items_after_finalizing(client, creator_with_group):
+def test_items_editable_in_review_but_not_once_open(client, creator_with_group):
     bill_id = _create_manual_bill(client, creator_with_group)
     headers = auth_headers(creator_with_group["creator_id"])
     client.post(
@@ -149,9 +149,23 @@ def test_cannot_add_items_after_finalizing(client, creator_with_group):
     )
     client.post(f"/api/v1/bills/{bill_id}/finalize-manual-entry", headers=headers)
 
+    # needs_review: fixing a missed line is allowed (decision 2026-11-20).
     resp = client.post(
         f"/api/v1/bills/{bill_id}/items",
         json={"parsed_name": "Late Item", "price": "1.00"},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    # The only participant is the creator, so the new item is predicted
+    # straight onto them rather than arriving unassigned.
+    assert len(resp.json()["assignments"]) == 1
+
+    assert client.post(f"/api/v1/bills/{bill_id}/confirm", headers=headers).status_code == 200
+
+    # open: items are locked, settlement is built on them.
+    resp = client.post(
+        f"/api/v1/bills/{bill_id}/items",
+        json={"parsed_name": "Too Late", "price": "1.00"},
         headers=headers,
     )
     assert resp.status_code == 409

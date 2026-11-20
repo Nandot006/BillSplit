@@ -5,10 +5,10 @@ from sqlalchemy.orm import Session
 from app.models.bill import Bill
 from app.models.bill_item import BillItem
 from app.models.bill_item_assignment import BillItemAssignment
-from app.models.person import Person
 from app.models.person_taxonomy_score import PersonTaxonomyScore
 from app.models.prediction_feedback import PredictionFeedback
 from app.models.taxonomy import TaxonomySource, TaxonomyValue
+from app.services.participants import bill_participant_people
 from app.services.prediction.scoring import _SCORED_DIMENSIONS, predict_assignment
 from app.services.prediction.vectors import ItemVector, PersonVector, build_person_vector
 
@@ -47,17 +47,17 @@ def build_item_vector(item: BillItem) -> ItemVector:
 
 
 def _build_person_vectors(
-    db: Session, group_id: uuid.UUID, exclude_person_id: uuid.UUID | None = None
+    db: Session, bill: Bill, exclude_person_id: uuid.UUID | None = None
 ) -> dict[uuid.UUID, PersonVector]:
-    """Builds every current group member's PersonVector, keyed by Person id.
-    exclude_person_id (Backend Block 10) leaves one Person out entirely -
-    used when re-scoring an item after that specific person has been
-    removed, so they can never end up re-selected as their own item's
-    replacement assignee."""
-    query = db.query(Person).filter(Person.group_id == group_id)
-    if exclude_person_id is not None:
-        query = query.filter(Person.id != exclude_person_id)
-    people = query.all()
+    """Builds every one of the bill's participants' PersonVectors, keyed by
+    Person id (decision 2026-11-20: predictions only consider people who
+    were actually on the bill, not the whole group). exclude_person_id
+    (Backend Block 10) leaves one Person out entirely - used when re-scoring
+    an item after that specific person has been removed, so they can never
+    end up re-selected as their own item's replacement assignee."""
+    people = [
+        person for person in bill_participant_people(db, bill) if person.id != exclude_person_id
+    ]
     return {person.id: build_person_vector(person.taxonomy_scores) for person in people}
 
 
@@ -74,7 +74,7 @@ def generate_predictions_for_bill(db: Session, bill: Bill) -> None:
     nothing to predict, and a human has to assign it manually before the
     bill can be confirmed (see the /confirm endpoint in routes/bill.py).
     """
-    person_vectors = _build_person_vectors(db, bill.group_id)
+    person_vectors = _build_person_vectors(db, bill)
 
     for item in bill.items:
         if item.assignments:
@@ -155,7 +155,7 @@ def redistribute_bill_after_person_removal(
 
         if remaining_person_vectors is None:
             remaining_person_vectors = _build_person_vectors(
-                db, bill.group_id, exclude_person_id=removed_person_id
+                db, bill, exclude_person_id=removed_person_id
             )
         item_vector = build_item_vector(item)
         result = predict_assignment(remaining_person_vectors, item_vector)
@@ -295,3 +295,78 @@ def record_correction(
     db.flush()
     db.refresh(item)
     return item.assignments
+
+
+def set_item_assignees(
+    db: Session, item: BillItem, person_ids: list[uuid.UUID]
+) -> list[BillItemAssignment]:
+    """Shared items (design.md SS7, decision 2026-11-20): replaces an item's
+    assignment set with `person_ids`, cost split evenly
+    (share_fraction = 1 / n). A single person is exactly the
+    record_correction flow above, so it delegates there.
+
+    Learning signal for a shared assignment (design.md SS8 doesn't cover
+    shared items explicitly; this mirrors record_correction's rules):
+      - each person newly added to the item gets the same +1 nudge and a
+        PredictionFeedback row as a single-person correction would;
+      - the scorer's original pick, if it's no longer on the item at all,
+        gets one -1 nudge (once, not once per added person);
+      - people who were already on the item get no new signal, and an
+        unchanged set is a no-op, so re-saving doesn't add learning noise.
+    """
+    unique_ids = list(dict.fromkeys(person_ids))
+    if len(unique_ids) == 1:
+        return record_correction(db, item, unique_ids[0])
+
+    existing = list(item.assignments)
+    existing_ids = {row.person_id for row in existing}
+    if existing_ids == set(unique_ids):
+        return existing
+
+    original_predicted_person_id = next(
+        (row.person_id for row in existing if row.is_predicted), None
+    )
+
+    for row in existing:
+        db.delete(row)
+    db.flush()
+
+    share = 1.0 / len(unique_ids)
+    for person_id in unique_ids:
+        db.add(
+            BillItemAssignment(
+                bill_item_id=item.id,
+                person_id=person_id,
+                is_predicted=False,
+                confidence_score=None,
+                share_fraction=share,
+            )
+        )
+
+    newly_added = [pid for pid in unique_ids if pid not in existing_ids]
+    for person_id in newly_added:
+        db.add(
+            PredictionFeedback(
+                bill_item_id=item.id,
+                original_predicted_person_id=original_predicted_person_id,
+                corrected_person_id=person_id,
+            )
+        )
+        apply_learned_correction(db, item, None, person_id)
+
+    if original_predicted_person_id is not None and original_predicted_person_id not in unique_ids:
+        _push_away(db, item, original_predicted_person_id)
+
+    db.flush()
+    db.refresh(item)
+    return item.assignments
+
+
+def _push_away(db: Session, item: BillItem, person_id: uuid.UUID) -> None:
+    """The -1 half of apply_learned_correction on its own: this person was
+    predicted for an item like this and turned out not to be on it."""
+    item_vector = build_item_vector(item)
+    for taxonomy_value in _SCORED_DIMENSIONS:
+        if item_vector.has(taxonomy_value):
+            _nudge_score(_get_or_create_score(db, person_id, taxonomy_value), signal=-1.0)
+    db.flush()

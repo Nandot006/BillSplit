@@ -1,0 +1,28 @@
+{
+  "description": "Synthetic. Indian restaurant bill: CGST + SGST lines summed into tax, service charge treated as tip, a 2x line that divides evenly, a 3x line that doesn't, and a zero-priced complimentary line that is dropped.",
+  "claude_response": {
+    "is_receipt": true,
+    "merchant_name": "  Annapoorna Gowrishankar ",
+    "items": [
+      {"name": "Paneer Butter Masala", "quantity": 1, "line_total": 240.0},
+      {"name": "Butter Naan", "quantity": 2, "line_total": 90.0},
+      {"name": "Fresh Lime Soda", "quantity": 3, "line_total": 200.0},
+      {"name": "Complimentary Papad", "quantity": 1, "line_total": 0.0},
+      {"name": "Gulab Jamun", "quantity": 1, "line_total": 85.5}
+    ],
+    "tax_total": 30.78,
+    "tip_total": 61.55
+  },
+  "expected": {
+    "merchant_name": "Annapoorna Gowrishankar",
+    "tax_total": "30.78",
+    "tip_total": "61.55",
+    "subtotal": "615.50",
+    "items": [
+      {"parsed_name": "Paneer Butter Masala", "price": "240.00", "quantity": 1},
+      {"parsed_name": "Butter Naan", "price": "45.00", "quantity": 2},
+      {"parsed_name": "Fresh Lime Soda (x3)", "price": "200.00", "quantity": 1},
+      {"parsed_name": "Gulab Jamun", "price": "85.50", "quantity": 1}
+    ]
+  }
+}

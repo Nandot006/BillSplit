@@ -10,6 +10,7 @@ from app.models import (  # noqa: F401 - side effect: registers tables on Base.m
     bill_item,
     bill_item_assignment,
     bill_item_tags,
+    bill_participant,
     group,
     payer_history,
     person,

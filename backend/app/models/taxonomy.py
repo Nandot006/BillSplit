@@ -1,6 +1,17 @@
 import enum
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    """For SQLAlchemy Enum(values_callable=...): store each member's *value*
+    ("needs_review", "drink-non-alcoholic") rather than its Python name
+    ("NEEDS_REVIEW"). The Postgres enum types the migrations create are
+    built from the values, so without this every insert of an enum column
+    fails on Postgres with "invalid input value for enum". SQLite (the test
+    DB) stores plain text and never noticed - see tests/test_enum_storage.py.
+    """
+    return [member.value for member in enum_cls]
+
+
 class BaseType(str, enum.Enum):
     """A BillItem's single, mutually-exclusive base type (design.md SS3)."""
 

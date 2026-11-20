@@ -16,6 +16,21 @@ class BillCreate(BaseModel):
     image_storage_path: str | None = None
     merchant_name: str | None = None
     bill_date: date | None = None
+    # Who was on this bill (decision 2026-11-20). Omitted -> everyone
+    # currently in the group. Every id must belong to the bill's group.
+    participant_person_ids: list[uuid.UUID] | None = None
+
+
+class BillParticipantAdd(BaseModel):
+    person_id: uuid.UUID
+
+
+class BillImageUrlOut(BaseModel):
+    """A short-lived signed URL for viewing the bill's receipt photo. The
+    storage bucket is private; the API checks group access, then mints this."""
+
+    url: str
+    expires_in: int
 
 
 class BillUpdate(BaseModel):
@@ -39,6 +54,7 @@ class BillOut(BaseModel):
     grand_total: Decimal | None = None
     status: BillStatus
     payer_person_id: uuid.UUID | None = None
+    participant_person_ids: list[uuid.UUID] = []
     created_at: datetime
     closed_at: datetime | None = None
 

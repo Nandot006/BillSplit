@@ -49,12 +49,23 @@ def record_payer_change(
         new_row.last_paid_at = datetime.now(timezone.utc)
 
 
-def suggest_payer(db: Session, group_id: uuid.UUID) -> Person | None:
+def suggest_payer(
+    db: Session, group_id: uuid.UUID, candidate_ids: list[uuid.UUID] | None = None
+) -> Person | None:
     """design.md SS11's prefill: whoever paid least recently, NULL
     (never paid) first, tie-broken alphabetically by display_name. Returns
-    None only if the group has no people at all. Always overridable by the
-    caller - this is a suggestion, not something enforced."""
-    people = db.query(Person).filter(Person.group_id == group_id).all()
+    None only if there's nobody to choose from. Always overridable by the
+    caller - this is a suggestion, not something enforced.
+
+    candidate_ids narrows the choice to a subset of the group - a bill's
+    participants (GET /bills/{id}/payer-suggestion) - while history still
+    comes from the whole group."""
+    query = db.query(Person).filter(Person.group_id == group_id)
+    if candidate_ids is not None:
+        if not candidate_ids:
+            return None
+        query = query.filter(Person.id.in_(candidate_ids))
+    people = query.all()
     if not people:
         return None
 
